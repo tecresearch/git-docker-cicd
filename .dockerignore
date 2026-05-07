@@ -1,0 +1,9 @@
+target
+.m2
+.git
+.idea
+*.log
+**/node_modules
+Dockerfile
+.env
+
