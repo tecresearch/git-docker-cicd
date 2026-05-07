@@ -1,6 +1,6 @@
 # Production containerization and CI/CD
 
-[![CI/CD](https://github.com/YOUR_USER/YOUR_REPO/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/YOUR_USER/YOUR_REPO/actions/workflows/ci-cd.yml)
+[![CI/CD](https://github.com/tecresearch/git-docker-cicd/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/tecresearch/git-docker-cicd/actions/workflows/ci-cd.yml)
 
 This project includes a multi-stage `Dockerfile`, a `docker-compose.yml`, and a GitHub Actions workflow to build, test, and publish the Spring Boot application.
 

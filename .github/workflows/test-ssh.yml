@@ -7,6 +7,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Connect to Tailscale
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          sudo tailscale up \
+            --authkey "$TAILSCALE_AUTHKEY" \
+            --accept-dns=true \
+            --accept-routes=true \
+            --hostname github-actions-ssh-test
+          tailscale status
+
       - name: Test SSH to VPS
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -19,4 +34,3 @@ jobs:
             whoami
             pwd
             docker --version
-
