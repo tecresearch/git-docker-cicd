@@ -1,6 +1,12 @@
 name: Deploy to VPS
 
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
   workflow_dispatch:
     inputs:
       image_tag:
@@ -19,19 +25,10 @@ permissions:
   contents: read
 
 jobs:
+  # Only deploy after CI/CD succeeds (when triggered via workflow_run)
   deploy:
     runs-on: ubuntu-latest
-    # Only run for manual dispatch or when CI/CD workflow completes successfully
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-
-    steps:
-      - name: Debug Workflow Event
-        run: |
-          echo "Event Name: ${{ github.event_name }}"
-          echo "Workflow Conclusion: ${{ github.event.workflow_run.conclusion }}"
-          echo "Workflow Name: ${{ github.event.workflow_run.workflow }}"
-
-      - name: Install Tailscale
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
 
@@ -51,8 +48,16 @@ jobs:
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             echo "image_tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          else
+            echo "Source: Manual dispatch with tag: ${{ inputs.image_tag }}"
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            echo "image_tag=sha-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "Source: Push event with SHA: ${{ github.sha }}"
+          elif [ "${GITHUB_EVENT_NAME}" = "workflow_run" ]; then
             echo "image_tag=sha-${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "Source: Workflow run with SHA: ${{ github.event.workflow_run.head_sha }}"
+          else
+            echo "image_tag=latest" >> "$GITHUB_OUTPUT"
+            echo "Source: Unknown event, using latest"
           fi
 
       - name: Deploy Docker image to VPS
