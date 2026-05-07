@@ -86,8 +86,32 @@ jobs:
             docker pull "$IMAGE_NAME:$IMAGE_TAG"
             
             echo "=== Stopping old container ==="
-            docker stop demo-app || true
-            docker rm demo-app || true
+            if [ "$(docker ps -aq -f name=demo-app)" ]; then
+              echo "Stopping existing demo-app container..."
+              docker stop demo-app || true
+              sleep 2
+              if [ "$(docker ps -aq -f name=demo-app)" ]; then
+                echo "Force killing demo-app..."
+                docker kill demo-app || true
+              fi
+              sleep 2
+              echo "Removing demo-app container..."
+              docker rm demo-app -f || true
+              sleep 2
+            else
+              echo "No existing demo-app container found"
+            fi
+            
+            echo "=== Verifying port 8080 is free ==="
+            if netstat -tlnp 2>/dev/null | grep -q ":8080"; then
+              echo "⚠️  Port 8080 is still in use, forcefully freeing it..."
+              PID=$(netstat -tlnp 2>/dev/null | grep ":8080" | awk '{print $NF}' | cut -d'/' -f1)
+              if [ -n "$PID" ]; then
+                kill -9 $PID || true
+              fi
+              sleep 2
+            fi
+            echo "✅ Port 8080 is free"
             
             echo "=== Starting new container ==="
             docker run -d \
@@ -97,26 +121,31 @@ jobs:
               -e JAVA_OPTS="-Xms256m -Xmx512m -Djava.security.egd=file:/dev/./urandom" \
               "$IMAGE_NAME:$IMAGE_TAG"
             
-            echo "=== Waiting for container to be healthy ==="
-            sleep 5
+            echo "✅ Container started successfully"
+            sleep 3
+            
+            echo "=== Waiting for application to be healthy ==="
             for i in {1..30}; do
               if docker exec demo-app curl -f http://localhost:8080/api/greeting > /dev/null 2>&1; then
-                echo "✅ Application is healthy!"
+                echo "✅ Application is healthy on attempt $i!"
                 break
               fi
               if [ $i -eq 30 ]; then
                 echo "❌ Application failed to become healthy after 30 attempts"
-                docker logs demo-app
+                echo "=== Container logs ==="
+                docker logs demo-app || true
+                echo "=== Running processes ==="
+                docker ps -a || true
                 exit 1
               fi
               echo "Attempt $i: Waiting for application to start..."
               sleep 1
             done
             
-            echo "=== Cleaning up images ==="
+            echo "=== Cleaning up old images ==="
             docker image prune -f || true
             
-            echo "=== Container status ==="
+            echo "=== Final container status ==="
             docker ps --filter "name=demo-app"
             
             echo "✅ Deployment completed successfully!"
