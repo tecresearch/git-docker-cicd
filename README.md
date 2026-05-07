@@ -448,3 +448,15 @@ git push origin main
 
 **Welcome to production-grade CI/CD automation!** 🎉
 
+---
+
+## 👨‍💻 Developer
+
+**Software Engineer:** Brijesh Nishad
+
+Built this production-grade CI/CD template to simplify Java/Spring Boot containerization and deployment for teams worldwide.
+
+---
+
+**Happy deploying!** 🚀
+
