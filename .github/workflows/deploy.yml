@@ -7,6 +7,13 @@ on:
         description: Docker image tag to deploy
         required: false
         default: latest
+  workflow_run:
+    workflows:
+      - CI/CD
+    branches:
+      - main
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -14,6 +21,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Install Tailscale
@@ -31,11 +39,20 @@ jobs:
             --hostname github-actions-deploy
           tailscale status
 
+      - name: Determine image tag
+        id: image_tag
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "image_tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_tag=sha-${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy Docker image to VPS
         uses: appleboy/ssh-action@v1.0.0
         env:
           IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/demo-app
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_TAG: ${{ steps.image_tag.outputs.image_tag }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         with:
@@ -47,16 +64,45 @@ jobs:
           script: |
             set -e
 
+            echo "=== Docker Login ==="
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            
+            echo "=== Pulling image: $IMAGE_NAME:$IMAGE_TAG ==="
             docker pull "$IMAGE_NAME:$IMAGE_TAG"
+            
+            echo "=== Stopping old container ==="
             docker stop demo-app || true
             docker rm demo-app || true
+            
+            echo "=== Starting new container ==="
             docker run -d \
               --name demo-app \
               --restart unless-stopped \
               -p 8080:8080 \
               -e JAVA_OPTS="-Xms256m -Xmx512m -Djava.security.egd=file:/dev/./urandom" \
               "$IMAGE_NAME:$IMAGE_TAG"
+            
+            echo "=== Waiting for container to be healthy ==="
+            sleep 5
+            for i in {1..30}; do
+              if docker exec demo-app curl -f http://localhost:8080/api/greeting > /dev/null 2>&1; then
+                echo "✅ Application is healthy!"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "❌ Application failed to become healthy after 30 attempts"
+                docker logs demo-app
+                exit 1
+              fi
+              echo "Attempt $i: Waiting for application to start..."
+              sleep 1
+            done
+            
+            echo "=== Cleaning up images ==="
             docker image prune -f || true
+            
+            echo "=== Container status ==="
             docker ps --filter "name=demo-app"
+            
+            echo "✅ Deployment completed successfully!"
 

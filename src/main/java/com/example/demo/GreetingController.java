@@ -11,5 +11,8 @@ public class GreetingController {
         return "Hello, World!";
     }
 
+    // Updated - First production deployment
+    // This demonstrates the complete end-to-end CI/CD pipeline
+
 }
 
